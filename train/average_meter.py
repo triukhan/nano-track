@@ -1,4 +1,3 @@
-
 class Meter(object):
     def __init__(self, name, val, avg):
         self.name = name

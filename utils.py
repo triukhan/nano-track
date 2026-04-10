@@ -6,9 +6,6 @@ import torch
 from colorama import Fore, Style
 
 
-__all__ = ['commit', 'describe']
-
-
 Corner = namedtuple('Corner', 'x1 y1 x2 y2')
 Center = namedtuple('Center', 'x y w h')
 

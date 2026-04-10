@@ -1,7 +1,7 @@
 import cv2
 import numpy as np
 
-from siam_tracker.utils import Center, center2corner, Corner, corner2center
+from utils import Center, center2corner, Corner, corner2center
 
 
 class Augmentation:

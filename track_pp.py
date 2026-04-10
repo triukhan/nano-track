@@ -1,15 +1,15 @@
 from pathlib import Path
 
 import cv2
-import torch
 
-from siam_tracker.model_builder import ModelBuilder
-from siam_tracker.nano_tracker import NanoTracker
-from siam_tracker.utils import load_pretrain
+from models.model_builder import ModelBuilder
+from nano_tracker import NanoTracker
+from utils import load_pretrain
+
 
 BASE_DIR = Path(__file__).resolve().parent
 PROJECT_ROOT = BASE_DIR.parent
-MODEL_PATH = PROJECT_ROOT / 'nanotrackv3.pth'
+MODEL_PATH = PROJECT_ROOT / 'nano-track' / 'nanotrackv3.pth'
 
 
 def track_object(video_path: Path, stop=False):
@@ -35,7 +35,6 @@ def track_object(video_path: Path, stop=False):
 
         if tracker.center_pos is not None:
             tracker.bbox = tracker.track(frame)['bbox']
-            x, y, w, h = tracker.bbox
             cv2.rectangle(
                 frame,
                 (int(tracker.center_pos[0] - 60 / 2), int(tracker.center_pos[1] - 60 / 2)),
@@ -43,13 +42,8 @@ def track_object(video_path: Path, stop=False):
                 (0, 255, 0),
                 2
             )
-            # cv2.rectangle(
-            #     frame,
-            #     (int(x), int(y)),
-            #     (int(x + w), int(y + h)),
-            #     (0, 0, 255),
-            #     2
-            # )
+            # x, y, w, h = tracker.bbox
+            # cv2.rectangle(frame, (int(x), int(y)), (int(x + w), int(y + h)), (0, 0, 255), 2)
 
         cv2.imshow('tracking with siam', frame)
 
@@ -62,5 +56,5 @@ def track_object(video_path: Path, stop=False):
     cv2.destroyAllWindows()
 
 
-vid = PROJECT_ROOT / 'tracker_project' / 'helicopter.mp4'
+vid = PROJECT_ROOT / 'nano-track' / 'data' / 'helicopter.mp4'
 track_object(vid, stop=True)

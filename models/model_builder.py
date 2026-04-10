@@ -1,18 +1,8 @@
-from __future__ import absolute_import
-from __future__ import division
-from __future__ import print_function
-from __future__ import unicode_literals
-
-from pathlib import Path
-
 import torch.nn as nn
 import torch
 
-from siam_tracker.backbone import mobilenetv3_small_v3
-# from siam_tracker.backbone import mobilenetv3_small_v3
-from siam_tracker.head import UPChannelBAN, DepthwiseBAN
-
-from torchvision.models import mobilenet_v3_small
+from models.backbone import mobilenetv3_small_v3
+from models.head import UPChannelBAN, DepthwiseBAN
 
 
 class AdjustLayer(nn.Module):

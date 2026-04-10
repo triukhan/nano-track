@@ -7,9 +7,9 @@ import cv2
 import numpy as np
 from torch.utils.data import Dataset
 
-from siam_tracker.train.augmentation import Augmentation
-from siam_tracker.train.point_target import PointTarget
-from siam_tracker.utils import center2corner, Center
+from train.augmentation import Augmentation
+from train.point_target import PointTarget
+from utils import center2corner, Center
 
 logger = logging.getLogger("global")
 
@@ -18,7 +18,19 @@ pyv = sys.version[0]
 if pyv[0] == '3':
     cv2.ocl.setUseOpenCL(False)
 
-NAMES = ['GOT', 'VID', 'YOUTUBEBB', 'COCO', 'DET', 'LASOT']
+DATASET = {
+    'NAMES': ['LASOT'],
+    'VIDEOS_PER_EPOCH': 400000,
+    'TEMPLATE': {'SHIFT': 4, 'SCALE': 0.05, 'BLUR': 0.0, 'FLIP': 0.0, 'COLOR': 1.0},
+    'SEARCH': {'SHIFT': 64, 'SCALE': 0.18, 'BLUR': 0.2, 'FLIP': 0.0, 'COLOR': 1.0},
+    'NEG': 0.2,
+    'GRAY': 0.0,
+    'LASOT': {'ROOT': '', 'ANNO': '', 'FRAME_RANGE': 100, 'NUM_USE': 100000}
+}
+TRAIN_EPOCH = 10
+EXEMPLAR_SIZE = 127
+SEARCH_SIZE = 255
+OUTPUT_SIZE = 15
 
 
 
@@ -97,8 +109,7 @@ class SubDataset(object):
 
     def get_image_anno(self, video, track, frame):
         frame = "{:06d}".format(frame)
-        image_path = os.path.join(self.root, video,
-                                  self.path_format.format(frame, track, 'x'))
+        image_path = os.path.join(self.root, video, self.path_format.format(frame, track, 'x'))
         image_anno = self.labels[video][track][frame]
         return image_path, image_anno
 
@@ -149,14 +160,14 @@ class BANDataset(Dataset):
         self.all_dataset = []
         start = 0
         self.num = 0
-        for name in NAMES:
-            subdata_cfg = getattr(cfg.DATASET, name)
+        for name in DATASET['NAMES']:
+            subdata_cfg = getattr(DATASET, name)
             sub_dataset = SubDataset(
                     name,
-                    subdata_cfg.ROOT,
-                    subdata_cfg.ANNO,
-                    subdata_cfg.FRAME_RANGE,
-                    subdata_cfg.NUM_USE,
+                    subdata_cfg['ROOT'],
+                    subdata_cfg['ANNO'],
+                    subdata_cfg['FRAME_RANGE'],
+                    subdata_cfg['NUM_USE'],
                     start
                 )
             start += sub_dataset.num
@@ -167,22 +178,22 @@ class BANDataset(Dataset):
 
         # data augmentation
         self.template_aug = Augmentation(
-                cfg.DATASET.TEMPLATE.SHIFT,
-                cfg.DATASET.TEMPLATE.SCALE,
-                cfg.DATASET.TEMPLATE.BLUR,
-                cfg.DATASET.TEMPLATE.FLIP,
-                cfg.DATASET.TEMPLATE.COLOR
+                DATASET['TEMPLATE']['SHIFT'],
+                DATASET['TEMPLATE']['SCALE'],
+                DATASET['TEMPLATE']['BLUR'],
+                DATASET['TEMPLATE']['FLIP'],
+                DATASET['TEMPLATE']['COLOR']
             )
         self.search_aug = Augmentation(
-                cfg.DATASET.SEARCH.SHIFT,
-                cfg.DATASET.SEARCH.SCALE,
-                cfg.DATASET.SEARCH.BLUR,
-                cfg.DATASET.SEARCH.FLIP,
-                cfg.DATASET.SEARCH.COLOR
+                DATASET['SEARCH']['SHIFT'],
+                DATASET['SEARCH']['SCALE'],
+                DATASET['SEARCH']['BLUR'],
+                DATASET['SEARCH']['FLIP'],
+                DATASET['SEARCH']['COLOR']
             )
-        videos_per_epoch = cfg.DATASET.VIDEOS_PER_EPOCH
+        videos_per_epoch = DATASET['VIDEOS_PER_EPOCH']
         self.num = videos_per_epoch if videos_per_epoch > 0 else self.num
-        self.num *= cfg.TRAIN.EPOCH
+        self.num *= TRAIN_EPOCH  # TRAIN.EPOCH
         self.pick = self.shuffle()
 
     def shuffle(self):
@@ -212,7 +223,7 @@ class BANDataset(Dataset):
         else:
             w, h = shape
         context_amount = 0.5
-        exemplar_size = cfg.TRAIN.EXEMPLAR_SIZE
+        exemplar_size = EXEMPLAR_SIZE
         wc_z = w + context_amount * (w+h)
         hc_z = h + context_amount * (w+h)
         s_z = np.sqrt(wc_z * hc_z)
@@ -230,8 +241,8 @@ class BANDataset(Dataset):
         index = self.pick[index]
         dataset, index = self._find_dataset(index)
 
-        gray = cfg.DATASET.GRAY and cfg.DATASET.GRAY > np.random.random()
-        neg = cfg.DATASET.NEG and cfg.DATASET.NEG > np.random.random()
+        gray = DATASET['GRAY'] and DATASET['GRAY'] > np.random.random()
+        neg = DATASET['NEG'] and DATASET['NEG'] > np.random.random()
 
         # get one dataset
         if neg:
@@ -251,16 +262,16 @@ class BANDataset(Dataset):
         # augmentation
         template, _ = self.template_aug(template_image,
                                         template_box,
-                                        cfg.TRAIN.EXEMPLAR_SIZE,
+                                        EXEMPLAR_SIZE,
                                         gray=gray)
 
         search, bbox = self.search_aug(search_image,
                                        search_box,
-                                       cfg.TRAIN.SEARCH_SIZE,
+                                       SEARCH_SIZE,
                                        gray=gray)
 
         # get labels
-        cls, delta = self.point_target(bbox, cfg.TRAIN.OUTPUT_SIZE, neg)
+        cls, delta = self.point_target(bbox, OUTPUT_SIZE, neg)
         template = template.transpose((2, 0, 1)).astype(np.float32)
         search = search.transpose((2, 0, 1)).astype(np.float32)
         return {

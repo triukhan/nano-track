@@ -1,16 +1,8 @@
-# Copyright (c) SenseTime. All Rights Reserved.
-
-from __future__ import absolute_import
-from __future__ import division
-from __future__ import print_function
-from __future__ import unicode_literals
-
 import argparse
 import logging
 import os
 import time
 import math
-import json
 import random
 import numpy as np
 
@@ -24,13 +16,14 @@ from torch.utils.data.distributed import DistributedSampler
 
 import sys
 
-from siam_tracker.model_builder import ModelBuilder
-from siam_tracker.train.average_meter import AverageMeter
-from siam_tracker.train.dataset import BANDataset
-from siam_tracker.train.distributed import get_world_size, get_rank, average_reduce, reduce_gradients, new_dist_init, \
+from models.model_builder import ModelBuilder
+from train.average_meter import AverageMeter
+from train.dataset import BANDataset
+from train.distributed import get_world_size, get_rank, average_reduce, reduce_gradients, new_dist_init, \
     DistModule
-from siam_tracker.train.lr_scheduler import build_lr_scheduler
-from siam_tracker.utils import describe, print_speed, commit, load_pretrain, restore_from
+from train.lr_scheduler import build_lr_scheduler
+from utils import describe, print_speed, commit, load_pretrain, restore_from
+
 
 sys.path.append(os.getcwd())
 logger = logging.getLogger('global')

@@ -1,6 +1,6 @@
 import numpy as np
 
-from siam_tracker.utils import corner2center
+from utils import corner2center
 
 STRIDE = 16
 SEARCH_SIZE = 255
