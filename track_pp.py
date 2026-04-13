@@ -9,7 +9,7 @@ from utils import load_pretrain
 
 BASE_DIR = Path(__file__).resolve().parent
 PROJECT_ROOT = BASE_DIR.parent
-MODEL_PATH = PROJECT_ROOT / 'nano-track' / 'nanotrackv3.pth'
+MODEL_PATH = PROJECT_ROOT / 'nano-track' / 'models'    / 'pretrained' / 'nanotrackv3.pth'
 
 
 def track_object(video_path: Path, stop=False):

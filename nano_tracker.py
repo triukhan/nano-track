@@ -171,7 +171,7 @@ class NanoTracker:
         crop_size = int(np.sqrt((w + context) * (h + context)))  # sqrt saves proportions
         self.channel_average = np.mean(frame, axis=(0, 1))
 
-        z_crop = get_subwindow_tracking(frame, self.center_pos, 127, crop_size, self.channel_average)
+        z_crop = get_subwindow_tracking(frame, self.center_pos, 127, crop_size, self.channel_average).cuda()
 
         self.model.init(z_crop)
 
@@ -181,7 +181,7 @@ class NanoTracker:
         s_z = np.sqrt(w_z * h_z)
         scale_z = 127 / s_z
         s_x = s_z * (255 / 127)
-        x_crop = get_subwindow_tracking(img, self.center_pos, 255, round(s_x), self.channel_average)
+        x_crop = get_subwindow_tracking(img, self.center_pos, 255, round(s_x), self.channel_average).cuda()
 
         outputs = self.model.track(x_crop)
         score = self._convert_score(outputs['cls'])
@@ -242,7 +242,6 @@ class NanoTracker:
         bbox = [cx - width / 2, cy - height / 2, width, height]
 
         best_score = score[best_idx]
-        print(best_score)
         return {
             'bbox': bbox,
             'best_score': best_score

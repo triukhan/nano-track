@@ -19,13 +19,13 @@ if pyv[0] == '3':
     cv2.ocl.setUseOpenCL(False)
 
 DATASET = {
-    'NAMES': ['LASOT'],
+    'NAMES': ['GOT10K'],
     'VIDEOS_PER_EPOCH': 400000,
     'TEMPLATE': {'SHIFT': 4, 'SCALE': 0.05, 'BLUR': 0.0, 'FLIP': 0.0, 'COLOR': 1.0},
     'SEARCH': {'SHIFT': 64, 'SCALE': 0.18, 'BLUR': 0.2, 'FLIP': 0.0, 'COLOR': 1.0},
     'NEG': 0.2,
     'GRAY': 0.0,
-    'LASOT': {'ROOT': '/home/danylo/data/full_data(1)/train', 'FRAME_RANGE': 100, 'NUM_USE': 100000}
+    'GOT10K': {'ROOT': '/home/danylo/data/full_data(1)/train', 'FRAME_RANGE': 100, 'NUM_USE': 100000}
 }
 TRAIN_EPOCH = 10
 EXEMPLAR_SIZE = 127

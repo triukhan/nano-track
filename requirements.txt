@@ -2,3 +2,4 @@ colorama
 numpy
 torch
 opencv-python
+tqdm
