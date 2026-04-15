@@ -43,12 +43,10 @@ class ModelBuilder(nn.Module):
 
 
     def init(self, z):
-        zf = self.backbone(z)
-        self.zf = zf
+        self.zf = self.backbone(z)
 
     def track(self, x):
         xf = self.backbone(x)
-        print(xf.shape)
         cls, loc = self.ban_head(self.zf, xf)
 
         return {'cls': cls, 'loc': loc}

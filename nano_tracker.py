@@ -11,94 +11,59 @@ PROJECT_ROOT = BASE_DIR.parent
 H, W = 60, 60
 
 
-# def get_subwindow_tracking(frame, target_pos, model_size: int, original_size: int, channel_avg):
-#     c = (original_size + 1) / 2
-#
-#     context_xmin = round(target_pos[0] - c)
-#     context_xmax = context_xmin + original_size - 1
-#     context_ymin = round(target_pos[1] - c)
-#     context_ymax = context_ymin + original_size - 1
-#
-#     left_pad = int(max(0, -context_xmin))
-#     top_pad = int(max(0, -context_ymin))
-#     right_pad = int(max(0, context_xmax - frame.shape[1] + 1))
-#     bottom_pad = int(max(0, context_ymax - frame.shape[0] + 1))
-#
-#     # if edge of the frame - add black pixels instead
-#     context_xmin += left_pad
-#     context_xmax += left_pad
-#     context_ymin += top_pad
-#     context_ymax += top_pad
-#
-#     if any([left_pad, top_pad, right_pad, bottom_pad]):
-#         te_im = cv2.copyMakeBorder(
-#             frame, top=top_pad, bottom=bottom_pad, left=left_pad, right=right_pad, borderType=cv2.BORDER_CONSTANT, value=channel_avg
-#         )
-#         im_path_original = te_im[
-#             context_ymin:context_ymax + 1,
-#             context_xmin:context_xmax + 1
-#         ]
-#     else:
-#         im_path_original = frame[context_ymin:context_ymax + 1, context_xmin:context_xmax + 1]
-#
-#     im_path = cv2.resize(im_path_original, (model_size, model_size))
-#
-#     return im_path
+def normalize(image_patch):
+    image_patch = image_patch.transpose(2, 0, 1)
+    image_patch = image_patch[np.newaxis, :, :, :]
+    image_patch = image_patch.astype(np.float32)
+    image_patch = torch.from_numpy(image_patch)
+    return image_patch
 
-def get_subwindow_tracking(im, pos, model_sz, original_sz, avg_chans):
+
+def get_subwindow_tracking(image, center_pos, model_size, original_size):
     """
     args:
         im: bgr based image
         pos: center position
         model_sz: exemplar size
         s_z: original size
-        avg_chans: channel average
     """
-    if isinstance(pos, float):
-        pos = [pos, pos]
-    sz = original_sz
-    im_sz = im.shape
-    center = (original_sz + 1) / 2
+    if isinstance(center_pos, float):
+        center_pos = [center_pos, center_pos]
 
-    context_xmin = np.floor(pos[0] - center + 0.5)
-    context_xmax = context_xmin + sz - 1
-    context_ymin = np.floor(pos[1] - center + 0.5)
-    context_ymax = context_ymin + sz - 1
+    channel_average = np.mean(image, axis=(0, 1))  # figuring out average color if crop_size out of image
+    im_size = image.shape
+    center = (original_size + 1) / 2
+
+    # figure out box original size x original size around center_pos
+    context_xmin = np.floor(center_pos[0] - center + 0.5)
+    context_xmax = context_xmin + original_size - 1
+    context_ymin = np.floor(center_pos[1] - center + 0.5)
+    context_ymax = context_ymin + original_size - 1
+
+    # figure out if box beyond the image
     left_pad = int(max(0., -context_xmin))
     top_pad = int(max(0., -context_ymin))
-    right_pad = int(max(0., context_xmax - im_sz[1] + 1))
-    bottom_pad = int(max(0., context_ymax - im_sz[0] + 1))
-
+    right_pad = int(max(0., context_xmax - im_size[1] + 1))
+    bottom_pad = int(max(0., context_ymax - im_size[0] + 1))
     context_xmin = context_xmin + left_pad
     context_xmax = context_xmax + left_pad
     context_ymin = context_ymin + top_pad
     context_ymax = context_ymax + top_pad
 
-    r, c, k = im.shape
+    # make borders
     if any([top_pad, bottom_pad, left_pad, right_pad]):
-        size = (r + top_pad + bottom_pad, c + left_pad + right_pad, k)
-        te_im = np.zeros(size, np.uint8)
-        te_im[top_pad:top_pad + r, left_pad:left_pad + c, :] = im
-        if top_pad:
-            te_im[0:top_pad, left_pad:left_pad + c, :] = avg_chans
-        if bottom_pad:
-            te_im[r + top_pad:, left_pad:left_pad + c, :] = avg_chans
-        if left_pad:
-            te_im[:, 0:left_pad, :] = avg_chans
-        if right_pad:
-            te_im[:, c + left_pad:, :] = avg_chans
-        im_patch = te_im[int(context_ymin):int(context_ymax + 1),
-        int(context_xmin):int(context_xmax + 1), :]
+        te_im = cv2.copyMakeBorder(
+            image, top_pad, bottom_pad, left_pad, right_pad, borderType=cv2.BORDER_CONSTANT, value=channel_average
+        )
+        im_patch = te_im[int(context_ymin):int(context_ymax + 1), int(context_xmin):int(context_xmax + 1)]
     else:
-        im_patch = im[int(context_ymin):int(context_ymax + 1),
-        int(context_xmin):int(context_xmax + 1), :]
+        im_patch = image[int(context_ymin):int(context_ymax + 1), int(context_xmin):int(context_xmax + 1)]
 
-    if not np.array_equal(model_sz, original_sz):
-        im_patch = cv2.resize(im_patch, (model_sz, model_sz))
-    im_patch = im_patch.transpose(2, 0, 1)
-    im_patch = im_patch[np.newaxis, :, :, :]
-    im_patch = im_patch.astype(np.float32)
-    im_patch = torch.from_numpy(im_patch)
+    # resize patch to size that appropriate for model
+    if not np.array_equal(model_size, original_size):
+        im_patch = cv2.resize(im_patch, (model_size, model_size))
+
+    im_patch = normalize(im_patch)
     return im_patch
 
 
@@ -106,7 +71,6 @@ class NanoTracker:
     def __init__(self, model):
         self.size = None
         self.center_pos = None
-        self.channel_average = None
         self.need_init = False
 
         self.context_amount = 0.5
@@ -121,6 +85,70 @@ class NanoTracker:
         self.points = self.generate_points(self.stride, self.score_size)
         self.model = model
         self.model.eval()
+
+    def init(self, frame, bbox):
+        self.center_pos = np.array([bbox[0], bbox[1]])
+        self.size = np.array([bbox[2], bbox[3]])
+
+        w, h = bbox[2], bbox[3]
+
+        # figuring out batch around bbox
+        context = self.context_amount * (w + h)
+        crop_size = int(np.sqrt((w + context) * (h + context)))  # sqrt saves proportions
+
+        z_crop = get_subwindow_tracking(frame, self.center_pos, 127, crop_size).cuda()
+
+        self.model.init(z_crop)
+
+    def track(self, frame):
+        w_z = self.size[0] + self.context_amount * np.sum(self.size)
+        h_z = self.size[1] + self.context_amount * np.sum(self.size)
+        s_z = np.sqrt(w_z * h_z)
+        scale_z = 127 / s_z
+        s_x = s_z * (255 / 127)
+        x_crop = get_subwindow_tracking(frame, self.center_pos, 255, round(s_x)).cuda()
+
+        outputs = self.model.track(x_crop)
+        scores = self._convert_score(outputs['cls'])
+        predicted_bboxes = self._convert_bbox(outputs['loc'], self.points)
+
+        def change(r):
+            return np.maximum(r, 1. / r)
+
+        def sz(w, h):
+            pad = (w + h) * 0.5
+            return np.sqrt((w + pad) * (h + pad))
+
+        # compare old bbox (self.size) vs new bboxes (predicted_bboxes) size
+        s_c = change(sz(predicted_bboxes[2, :], predicted_bboxes[3, :]) / (sz(self.size[0] * scale_z, self.size[1] * scale_z)))
+        # compare aspect ratio
+        r_c = change((self.size[0] / self.size[1]) / (predicted_bboxes[2, :] / predicted_bboxes[3, :]))
+
+        penalty = np.exp(-(r_c * s_c - 1) * 0.138) # combine penalty
+        penalty_scores = penalty * scores # apply penalty to the every candidate score
+        penalty_scores = penalty_scores * (1 -  0.455) + self.window * 0.455 # smooth to center
+        best_idx = np.argmax(penalty_scores) # choose the best candidate
+
+        bbox = predicted_bboxes[:, best_idx] / scale_z
+
+        cx = bbox[0] + self.center_pos[0]
+        cy = bbox[1] + self.center_pos[1]
+
+        # exponential smoothing
+        lr = penalty[best_idx] * scores[best_idx] * 0.348
+        width = self.size[0] * (1 - lr) + bbox[2] * lr
+        height = self.size[1] * (1 - lr) + bbox[3] * lr
+
+        # don't let center be out of frame
+        cx, cy, width, height = self._bbox_clip(cx, cy, width, height, frame.shape[:2])
+
+        self.center_pos = np.array([cx, cy])
+        self.size = np.array([width, height])
+
+        return {
+            'bbox': [cx - width / 2, cy - height / 2, width, height],
+            'best_score': scores[best_idx]
+        }
 
     @staticmethod
     def generate_points(stride, size):
@@ -160,92 +188,6 @@ class NanoTracker:
         width = max(10, min(width, boundary[1]))
         height = max(10, min(height, boundary[0]))
         return cx, cy, width, height
-
-    def init(self, frame, bbox):
-        self.center_pos = np.array([bbox[0], bbox[1]])
-        self.size = np.array([bbox[2], bbox[3]])
-
-        w, h = bbox[2], bbox[3]
-
-        context = self.context_amount * (w + h)
-        crop_size = int(np.sqrt((w + context) * (h + context)))  # sqrt saves proportions
-        self.channel_average = np.mean(frame, axis=(0, 1))
-
-        z_crop = get_subwindow_tracking(frame, self.center_pos, 127, crop_size, self.channel_average).cuda()
-
-        self.model.init(z_crop)
-
-    def track(self, img):
-        w_z = self.size[0] + self.context_amount * np.sum(self.size)
-        h_z = self.size[1] + self.context_amount * np.sum(self.size)
-        s_z = np.sqrt(w_z * h_z)
-        scale_z = 127 / s_z
-        s_x = s_z * (255 / 127)
-        x_crop = get_subwindow_tracking(img, self.center_pos, 255, round(s_x), self.channel_average).cuda()
-
-        outputs = self.model.track(x_crop)
-        score = self._convert_score(outputs['cls'])
-        pred_bbox = self._convert_bbox(outputs['loc'], self.points)
-
-        def change(r):
-            return np.maximum(r, 1. / r)
-
-        def sz(w, h):
-            pad = (w + h) * 0.5
-            return np.sqrt((w + pad) * (h + pad))
-
-        # scale penalty
-        s_c = change(sz(pred_bbox[2, :], pred_bbox[3, :]) / (sz(self.size[0] * scale_z, self.size[1] * scale_z)))
-
-        # aspect ratio penalty
-        r_c = change((self.size[0] / self.size[1]) / (pred_bbox[2, :] / pred_bbox[3, :]))
-        penalty = np.exp(-(r_c * s_c - 1) * 0.138)
-
-        # score
-        pscore = penalty * score
-
-        # window penalty
-        pscore = pscore * (1 -  0.455) + \
-                 self.window * 0.455
-
-        best_idx = np.argmax(pscore)
-
-        bbox = pred_bbox[:, best_idx] / scale_z
-
-        lr = penalty[best_idx] * score[best_idx] * 0.348
-
-        cx = bbox[0] + self.center_pos[0]
-        cy = bbox[1] + self.center_pos[1]
-
-        # dx = pred_bbox[0, best_idx] / scale_z
-        # dy = pred_bbox[1, best_idx] / scale_z
-        #
-        # cx = self.center_pos[0] + dx
-        # cy = self.center_pos[1] + dy
-        #
-        # # 🔒 фіксований розмір
-        # width = self.size[0]
-        # height = self.size[1]
-
-
-        # smooth bbox
-        width = self.size[0] * (1 - lr) + bbox[2] * lr
-        height = self.size[1] * (1 - lr) + bbox[3] * lr
-
-        # clip boundary
-        cx, cy, width, height = self._bbox_clip(cx, cy, width, height, img.shape[:2])
-
-        # udpate state
-        self.center_pos = np.array([cx, cy])
-        self.size = np.array([width, height])
-
-        bbox = [cx - width / 2, cy - height / 2, width, height]
-
-        best_score = score[best_idx]
-        return {
-            'bbox': bbox,
-            'best_score': best_score
-        }
 
 
     def on_mouse(self, event, cx, cy, _, __):
