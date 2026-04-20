@@ -114,6 +114,7 @@ def get_subwindow_tracking(image, center_pos, model_size, original_size):
 class NanoTracker:
     def __init__(self, model):
         self.size = None
+        self.is_lost = False
         self.center_pos = None
         self.kalman_filter = None
         self.need_init = False
@@ -188,6 +189,7 @@ class NanoTracker:
         return best_bbox, best_score, best_center
 
     def init(self, frame, bbox):
+        self.lost_counter = 0
         self.kalman_filter = create_kalman()
         self.center_pos = np.array([bbox[0], bbox[1]])
         self.size = np.array([bbox[2], bbox[3]])
@@ -216,11 +218,16 @@ class NanoTracker:
 
         w_z = self.size[0] + self.context_amount * np.sum(self.size)
         h_z = self.size[1] + self.context_amount * np.sum(self.size)
-        s_z = np.sqrt(w_z * h_z)
+        area = w_z * h_z
+        if area <= 0 or np.isnan(area):
+            area = 1.0
+
+        s_z = np.sqrt(area)
 
         scale_z = 127 / s_z
         s_x = s_z * (255 / 127)
 
+        # search_center = (px, py) if with_kalman and self.is_lost else self.center_pos
         x_crop = get_subwindow_tracking(frame, self.center_pos, 255, round(s_x))
 
         outputs = self.model.track(x_crop)
@@ -263,16 +270,18 @@ class NanoTracker:
             motion_penalty = np.exp(-norm_dist * 5)
             conf = penalty[best_idx] * motion_penalty
 
-            print(self.lost_counter)
+            print(self.lost_counter, score)
 
             if score < score_threshold:
                 self.lost_counter += 1
-            elif score > score_threshold and self.lost_counter >= 5:
-                print('detection counter +1')
+            elif self.lost_counter >= 5:
+                # need to success returning
                 self.returned_counter += 1
 
-            if score > score_threshold and (self.returned_counter >= 2 or self.lost_counter <= 5):
-                print('kalman corrected')
+            self.is_lost = self.lost_counter > 5
+
+            if score > score_threshold and not self.is_lost or self.returned_counter >= 2:
+                # detection ok
                 self.kalman_filter.correct(np.array([[cx], [cy], [width], [height]], np.float32))
                 self.lost_counter = 0
                 self.returned_counter = 0
@@ -289,8 +298,11 @@ class NanoTracker:
             #     print('kalman rolled back')
 
 
-            if self.lost_counter > 5:
+            if self.is_lost:
                 alpha = 0.0
+                pw = self.size[0]
+                ph = self.size[1]
+
             else:
                 alpha = scores[best_idx] * conf
                 alpha = np.clip(alpha, 0, 0.7)
@@ -308,8 +320,6 @@ class NanoTracker:
         self.center_pos = np.array([bx, by])
         self.size = np.array([bw, bh])
         sx1, xy1, sx2, sy2 = get_search_bbox(self.center_pos, s_x)
-
-        print(score)
 
         return {
             'bbox': [cx - width / 2, cy - height / 2, width, height],
@@ -337,6 +347,7 @@ class NanoTracker:
         for dx, dy in offsets:
             cx = np.clip(cx0 + dx, 0, fW)
             cy = np.clip(cy0 + dy, 0, fH)
+
 
             x_crop = get_subwindow_tracking(frame, (cx, cy), 255, round(s_x))
             outputs = self.model.track(x_crop)

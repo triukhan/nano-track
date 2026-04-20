@@ -134,5 +134,5 @@ def track_object(video_path: Path, stop=False):
     cv2.destroyAllWindows()
 
 
-vid = PROJECT_ROOT / 'nano-track' / 'data' / '2796079-uhd_3840_2160_25fps.mp4'
+vid = PROJECT_ROOT / 'nano-track' / 'data' / '8177427-uhd_3840_2160_24fps.mp4'
 track_object(vid, stop=True)
