@@ -9,7 +9,24 @@ from utils import load_pretrain
 
 BASE_DIR = Path(__file__).resolve().parent
 PROJECT_ROOT = BASE_DIR.parent
-MODEL_PATH = PROJECT_ROOT / 'nano-track' / 'models'    / 'pretrained' / 'nanotrackv3.pth'
+MODEL_PATH = PROJECT_ROOT / 'nano-track' / 'models' / 'pretrained' / 'nanotrackv3.pth'
+
+def draw_box(frame, box, color, name):
+    x, y, w, h = box
+
+    pt1 = (int(x), int(y))
+    pt2 = (int(x + w), int(y + h))
+
+    cv2.rectangle(frame, pt1, pt2, color, 2)
+    cv2.putText(
+        frame,
+        name,
+        (int(x), int(y) - 10),
+        cv2.FONT_HERSHEY_SIMPLEX,
+        0.6,
+        color,
+        2
+    )
 
 
 def track_object(video_path: Path, stop=False):
@@ -34,14 +51,31 @@ def track_object(video_path: Path, stop=False):
             tracker.need_init = False
 
         if tracker.center_pos is not None:
-            tracker.bbox = tracker.track(frame)['bbox']
-            cv2.rectangle(
-                frame,
-                (int(tracker.center_pos[0] - 60 / 2), int(tracker.center_pos[1] - 60 / 2)),
-                (int(tracker.center_pos[0] - 60 / 2) + 60, int(tracker.center_pos[1] - 60 / 2) + 60),
-                (0, 255, 0),
-                2
-            )
+            res = tracker.track(frame)
+            tracker.bbox = res['bbox']
+
+            bbox = res['bbox']
+            filtered = res['filtered']
+            kalman = res['kalman_prediction']
+
+            x, y, w, h = tracker.bbox
+            # draw_box(frame, bbox, (0, 255, 0), "bbox")
+            draw_box(frame, filtered, (0, 255, 0), "filtered")
+            # draw_box(frame, kalman, (0, 0, 255), "kalman")
+            # px, py, pw, ph = res['kalman_prediction']
+            # cv2.rectangle(
+            #     frame,
+            #     (px - pw / 2, py - ph / 2), (pw, ph),
+            #     (0, 0, 255),
+            #     2
+            # )
+            # fx, fy, fw, fh = res['filtered']
+            # cv2.rectangle(
+            #     frame,
+            #     (fx - fw / 2, fy - fh / 2), (fw, fh),
+            #     (255, 0, 0),
+            #     2
+            # )
             # x, y, w, h = tracker.bbox
             # cv2.rectangle(frame, (int(x), int(y)), (int(x + w), int(y + h)), (0, 0, 255), 2)
 
@@ -56,5 +90,5 @@ def track_object(video_path: Path, stop=False):
     cv2.destroyAllWindows()
 
 
-vid = PROJECT_ROOT / 'nano-track' / 'data' / 'helicopter.mp4'
+vid = PROJECT_ROOT / 'nano-track' / 'data' / '8177427-uhd_3840_2160_24fps.mp4'
 track_object(vid, stop=True)

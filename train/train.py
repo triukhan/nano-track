@@ -32,9 +32,9 @@ parser.add_argument('--seed', type=int, default=123456, help='random seed')
 parser.add_argument('--local_rank', type=int, default=0, help='compulsory for pytorch launcer')
 args = parser.parse_args()
 
-
+PRETRAINED = 'models/pretrained/nanotrackv3.pth'
 BATCH_SIZE = 64
-NUM_WORKERS = 8
+NUM_WORKERS = 2
 TRAIN_EPOCH = 10
 TRAIN_LAYERS = ['features']
 LAYERS_LR = 0.1
@@ -203,7 +203,7 @@ def train(train_loader, model, optimizer, lr_scheduler, tb_writer):
         data_time = average_reduce(time.time() - end)
         if rank == 0:
             tb_writer.add_scalar('time/data', data_time, tb_idx)
-
+        data = {k: v.cuda() if isinstance(v, torch.Tensor) else v for k, v in data.items()}
         outputs = model(data)
         loss = outputs['total_loss']
 
@@ -261,12 +261,11 @@ def main():
             os.makedirs(LOG_DIR)
         logger.info("Version Information: \n{}\n".format(commit()))
 
-    # model = ModelBuilder().cuda().train()
-    model = ModelBuilder().train()
+    model = ModelBuilder().cuda().train()
 
-    # if cfg.BACKBONE.PRETRAINED:
+    # if BACKBONE_PRETRAINED:
     #     cur_path = os.path.dirname(os.path.realpath(__file__))
-    #     backbone_path = os.path.join(cur_path, '../../', cfg.BACKBONE.PRETRAINED)
+    #     backbone_path = os.path.join(cur_path, '../', BACKBONE_PRETRAINED)
     #     load_pretrain(model.backbone, backbone_path)
 
     if rank == 0 and LOG_DIR:
@@ -286,8 +285,10 @@ def main():
     #         restore_from(model, optimizer, cfg.TRAIN.RESUME)
 
     # load pretrain
-    # elif cfg.TRAIN.PRETRAINED:
-    #     load_pretrain(model, cfg.TRAIN.PRETRAINED)
+    if PRETRAINED:
+        cur_path = os.path.dirname(os.path.realpath(__file__))
+        path = os.path.join(cur_path, '../', PRETRAINED)
+        load_pretrain(model, path)
     dist_model = DistModule(model)
 
     logger.info(lr_scheduler)

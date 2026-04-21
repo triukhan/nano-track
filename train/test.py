@@ -64,7 +64,7 @@ def main():
     model = ModelBuilder()
 
     # load model
-    model = load_pretrain(model, MODEL_PATH).cuda().eval()
+    model = load_pretrain(model, MODEL_PATH).eval()
 
     # build tracker
     tracker = NanoTracker(model)

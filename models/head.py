@@ -76,7 +76,7 @@ class DepthwiseXCorr(nn.Module):
         self.conv_kernel = nn.Sequential(
             # pw
             nn.Conv2d(in_channels, out_channels, kernel_size=1, stride=1),
-            nn.BatchNorm2d(out_channels)
+            nn.BatchNorm2d(out_channels),
         )
 
         self.conv_search = nn.Sequential(
@@ -84,6 +84,8 @@ class DepthwiseXCorr(nn.Module):
             nn.Conv2d(in_channels, out_channels, kernel_size=1, stride=1),
             nn.BatchNorm2d(out_channels),
         )
+
+        self.channel_align = nn.Conv2d(16, 64, kernel_size=1)
 
         for modules in [self.conv_kernel, self.conv_search]:
             for m in modules.modules():
@@ -187,7 +189,12 @@ class PixelwiseXCorr(nn.Module):
         kernel = self.conv_kernel(kernel)
         search = self.conv_search(search)
 
-        feature = xcorr_pixelwise(search, kernel)  #
+        feature = xcorr_pixelwise(search, kernel)
+        b, c, h, w = feature.shape
+        if c != 64:
+            feature = feature.view(b, 1, c, h * w)  # (b, 1, hz*wz, h*w)
+            feature = F.adaptive_avg_pool2d(feature, (64, h * w))  # (b, 1, 64, h*w)
+            feature = feature.view(b, 64, h, w)
 
         corr = self.CA_layer(feature)
 

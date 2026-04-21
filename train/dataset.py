@@ -25,7 +25,7 @@ DATASET = {
     'SEARCH': {'SHIFT': 64, 'SCALE': 0.18, 'BLUR': 0.2, 'FLIP': 0.0, 'COLOR': 1.0},
     'NEG': 0.2,
     'GRAY': 0.0,
-    'GOT10K': {'ROOT': '/home/danylo/data/full_data(1)/train', 'FRAME_RANGE': 100, 'NUM_USE': 100000}
+    'GOT10K': {'ROOT': '/home/danylo/data/GOT-10k/train', 'FRAME_RANGE': 100, 'NUM_USE': 100000}
 }
 TRAIN_EPOCH = 10
 EXEMPLAR_SIZE = 127
