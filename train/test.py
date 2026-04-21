@@ -50,7 +50,7 @@ LR = 0.348
 BASE_DIR = Path(__file__).resolve().parent
 PROJECT_ROOT = BASE_DIR.parent
 MODEL_PATH = PROJECT_ROOT / 'models' / 'pretrained' / 'nanotrackv3.pth'
-DATASET_PATH = '/home/danylo/data/GOT-10k'
+DATASET_PATH = PROJECT_ROOT / 'data'
 
 
 def main():
