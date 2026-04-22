@@ -1,6 +1,7 @@
 import os
 import argparse
 import sys
+from pathlib import Path
 
 sys.path.append(os.path.abspath('.'))
 
@@ -186,8 +187,11 @@ def eval(args):
 
     assert len(trackers) > 0
     args.num = min(args.num, len(trackers))
+    BASE_DIR = Path(__file__).resolve().parent
+    PROJECT_ROOT = BASE_DIR.parent
+    DATASET_PATH = PROJECT_ROOT / 'data'
 
-    root_dir = os.path.abspath('/home/danylo/data/GOT-10k')
+    root_dir = os.path.abspath(DATASET_PATH)
     e = ExperimentGOT10k(root_dir)
     ao, sr, speed = e.report([args.tracker_name])
     ss = 'ao:%.3f --sr:%.3f -speed:%.3f' % (float(ao), float(sr), float(speed))

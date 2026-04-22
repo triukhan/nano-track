@@ -25,34 +25,6 @@ def get_search_bbox(center_pos, s_x):
     return x1, y1, x2, y2
 
 
-def create_kalman():
-    kalman_f = cv2.KalmanFilter(8, 4)
-
-    kalman_f.transitionMatrix = np.array([
-        [1,0,0,0,1,0,0,0],
-        [0,1,0,0,0,1,0,0],
-        [0,0,1,0,0,0,1,0],
-        [0,0,0,1,0,0,0,1],
-        [0,0,0,0,1,0,0,0],
-        [0,0,0,0,0,1,0,0],
-        [0,0,0,0,0,0,1,0],
-        [0,0,0,0,0,0,0,1]
-    ], np.float32)
-
-    kalman_f.measurementMatrix = np.array([
-        [1,0,0,0,0,0,0,0],
-        [0,1,0,0,0,0,0,0],
-        [0,0,1,0,0,0,0,0],
-        [0,0,0,1,0,0,0,0]
-    ], np.float32)
-
-    kalman_f.processNoiseCov = np.eye(8, dtype=np.float32) * 0.01
-    kalman_f.measurementNoiseCov = np.eye(4, dtype=np.float32) * 0.05
-
-    return kalman_f
-
-
-
 def normalize(image_patch):
     image_patch = image_patch.transpose(2, 0, 1)
     image_patch = image_patch[np.newaxis, :, :, :]
@@ -109,14 +81,11 @@ def get_subwindow_tracking(image, center_pos, model_size, original_size):
     return im_patch
 
 
-
-
 class NanoTracker:
     def __init__(self, model):
         self.size = None
         self.is_lost = False
         self.center_pos = None
-        self.kalman_filter = None
         self.need_init = False
         self.lost_counter = 0
         self.returned_counter = 0
@@ -190,16 +159,10 @@ class NanoTracker:
 
     def init(self, frame, bbox):
         self.lost_counter = 0
-        self.kalman_filter = create_kalman()
         self.center_pos = np.array([bbox[0], bbox[1]])
         self.size = np.array([bbox[2], bbox[3]])
 
         w, h = bbox[2], bbox[3]
-
-        # zeros - we don't have these values so far, cuz this is the first frame
-        self.kalman_filter.statePost = np.array([[bbox[0]], [bbox[1]], [w], [h], [0], [0], [0], [0]], np.float32)
-        self.kalman_filter.statePre = self.kalman_filter.statePost.copy() # just for correct initializing. by default statePre has zeros
-        self.kalman_filter.errorCovPost = np.eye(8, dtype=np.float32)  # set a shape of uncertainty
 
         # figuring out batch around bbox
         context = self.context_amount * (w + h)
@@ -207,14 +170,10 @@ class NanoTracker:
 
         z_crop = get_subwindow_tracking(frame, self.center_pos, 127, crop_size)
         self.model.init(z_crop)
-        self.kalman_history = deque(maxlen=30)
+        # self.kalman_history = deque(maxlen=30)
 
     def track(self, frame, with_kalman=True):
-        if with_kalman:
-            prediction = self.kalman_filter.predict()
-            px, py, pw, ph = prediction[:4].flatten()
-        else:
-            px, py, pw, ph = self.center_pos[0], self.center_pos[1], self.size[0], self.size[1]
+        px, py, pw, ph = self.center_pos[0], self.center_pos[1], self.size[0], self.size[1]
 
         w_z = self.size[0] + self.context_amount * np.sum(self.size)
         h_z = self.size[1] + self.context_amount * np.sum(self.size)
@@ -282,13 +241,10 @@ class NanoTracker:
 
             if score > score_threshold and not self.is_lost or self.returned_counter >= 2:
                 # detection ok
-                self.kalman_filter.correct(np.array([[cx], [cy], [width], [height]], np.float32))
+                # self.kalman_filter.correct(np.array([[cx], [cy], [width], [height]], np.float32))
                 self.lost_counter = 0
                 self.returned_counter = 0
 
-                # self.kalman_history.append(
-                #     self.kalman_filter.statePost[4:8].copy()  # [vx, vy, vw, vh]
-                # )
 
             # if self.lost_counter == 5:
             #     old_velocity = self.kalman_history[-10]
@@ -325,7 +281,7 @@ class NanoTracker:
             'bbox': [cx - width / 2, cy - height / 2, width, height],
             'best_score': alpha,
             'kalman_prediction': [px, py, pw, ph],
-            'filtered': [bx - bw / 2, by - bh / 2, bw, bh],
+            'filtered': [bx, by, bw, bh], # center
             'print': [sx1, xy1, sx2, sy2],
         }
 
@@ -405,11 +361,4 @@ class NanoTracker:
         width = max(10, min(width, boundary[1]))
         height = max(10, min(height, boundary[0]))
         return cx, cy, width, height
-
-
-    def on_mouse(self, event, cx, cy, _, __):
-        if event == cv2.EVENT_LBUTTONDOWN:
-            w, h = 60, 60
-            self.bbox = (cx, cy, w, h)
-            self.need_init = True
 
