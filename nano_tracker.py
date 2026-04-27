@@ -9,6 +9,8 @@ from utils import corner2center
 BASE_DIR = Path(__file__).resolve().parent
 PROJECT_ROOT = BASE_DIR.parent
 H, W = 60, 60
+UPDATE_FREQUENCY = 50
+REINIT_SCORE_THRESHOLD = 0.99
 
 
 def get_search_bbox(center_pos, s_x):
@@ -116,7 +118,7 @@ class NanoTracker:
         self.need_init = False
         self.lost_counter = 0
         self.returned_counter = 0
-        self.counter = 0
+        self.reinit_counter = 0
 
         self.context_amount = 0.5
         # --------------------------------------------------------------------------------------------------------------
@@ -202,13 +204,12 @@ class NanoTracker:
 
         z_crop = get_subwindow_tracking(frame, self.center_pos, 127, crop_size)
         self.model.init(z_crop)
+        self.reinit_counter = 0
 
-    def track(self, frame, with_kalman=True):
-        if with_kalman:
-            prediction = self.kalman_filter.predict()
-            px, py, pw, ph = prediction[:4].flatten()
-        else:
-            px, py, pw, ph = self.center_pos[0], self.center_pos[1], self.size[0], self.size[1]
+    def track(self, frame):
+        self.reinit_counter += 1
+        prediction = self.kalman_filter.predict()
+        px, py, pw, ph = prediction[:4].flatten()
 
         w_z = self.size[0] + self.context_amount * np.sum(self.size)
         h_z = self.size[1] + self.context_amount * np.sum(self.size)
@@ -217,11 +218,9 @@ class NanoTracker:
             area = 1.0
 
         s_z = np.sqrt(area)
-
         scale_z = 127 / s_z
         s_x = s_z * (255 / 127)
 
-        # search_center = (px, py) if with_kalman and self.is_lost else self.center_pos
         x_crop = get_subwindow_tracking(frame, self.center_pos, 255, round(s_x))
 
         outputs = self.model.track(x_crop)
@@ -235,8 +234,7 @@ class NanoTracker:
             pad = (w + h) * 0.5
             return np.sqrt((w + pad) * (h + pad))
 
-        s_c = change(
-            sz(predicted_bboxes[2, :], predicted_bboxes[3, :]) / (sz(self.size[0] * scale_z, self.size[1] * scale_z)))
+        s_c = change(sz(predicted_bboxes[2, :], predicted_bboxes[3, :]) / (sz(self.size[0] * scale_z, self.size[1] * scale_z)))
         r_c = change((self.size[0] / self.size[1]) / (predicted_bboxes[2, :] / predicted_bboxes[3, :]))
 
         penalty = np.exp(-(r_c * s_c - 1) * 0.138)
@@ -258,75 +256,74 @@ class NanoTracker:
         score = scores[best_idx]
         score_threshold = 0.95
 
-        if with_kalman:
-            dist = np.linalg.norm([cx - px, cy - py])
-            norm_dist = dist / (pw + ph + 1e-6)
-            motion_penalty = np.exp(-norm_dist * 5)
-            conf = penalty[best_idx] * motion_penalty
+        dist = np.linalg.norm([cx - px, cy - py])
+        norm_dist = dist / (pw + ph + 1e-6)
+        motion_penalty = np.exp(-norm_dist * 5)
+        conf = penalty[best_idx] * motion_penalty
 
-            print(self.lost_counter, score)
+        print(self.lost_counter, score)
 
-            if score < score_threshold:
-                self.lost_counter += 1
-            elif self.lost_counter >= 5:
-                # need to success returning
-                self.returned_counter += 1
+        if score < score_threshold:
+            self.lost_counter += 1
+        elif self.lost_counter >= 5:
+            # need to success returning
+            self.returned_counter += 1
 
-            self.is_lost = self.lost_counter > 5
+        self.is_lost = self.lost_counter > 5
 
-            if score > score_threshold and not self.is_lost or self.returned_counter >= 2:
-                # detection ok
-                self.kalman_filter.correct(np.array([[cx], [cy], [width], [height]], np.float32))
-                self.lost_counter = 0
-                self.returned_counter = 0
-
-            if self.is_lost:
-                print(self.lost_counter)
-                if self.lost_counter == 6 or self.lost_counter % 15 == 0:
-                    best_bbox, best_score, best_center = self._redetect(frame, s_x, scale_z)
-                    print(best_score)
-                    if best_score > 0.99:
-                        self.lost_counter = 0
-                        self.returned_counter = 0
-                        self.is_lost = False
-
-                        cx, cy = best_center
-                        bw, bh = best_bbox[2], best_bbox[3]
-                        self.center_pos = np.array([cx, cy])
-                        self.size = np.array([bw, bh])
-                        self.kalman_filter.correct(np.array([[cx], [cy], [bw], [bh]], np.float32))
-                        self.kalman_filter.statePost[4:8] = 0
-
-                        return {'filtered': best_bbox}
-
-                alpha = 0.0
-                # pw = self.size[0]
-                # ph = self.size[1]
-            else:
-                alpha = scores[best_idx] * conf
-                alpha = np.clip(alpha, 0, 0.7)
-
-            bx = alpha * cx + (1 - alpha) * px
-            by = alpha * cy + (1 - alpha) * py
-            bw = alpha * width + (1 - alpha) * pw
-            bh = alpha * height + (1 - alpha) * ph
-        else:
-            bx, by, bw, bh = cx, cy, width, height
+        if score > score_threshold and not self.is_lost or self.returned_counter >= 2:
+            # detection ok
+            self.kalman_filter.correct(np.array([[cx], [cy], [width], [height]], np.float32))
             self.lost_counter = 0
             self.returned_counter = 0
+
+        if self.is_lost:
+            print(self.lost_counter)
+            if self.lost_counter == 6 or self.lost_counter % 15 == 0:
+                best_bbox, best_score, best_center = self._redetect(frame, s_x, scale_z)
+                print(best_score)
+                if best_score > 0.99:
+                    self.lost_counter = 0
+                    self.returned_counter = 0
+                    self.is_lost = False
+
+                    cx, cy = best_center
+                    bw, bh = best_bbox[2], best_bbox[3]
+                    self.center_pos = np.array([cx, cy])
+                    self.size = np.array([bw, bh])
+                    self.kalman_filter.correct(np.array([[cx], [cy], [bw], [bh]], np.float32))
+                    self.kalman_filter.statePost[4:8] = 0
+
+                    return {'filtered': best_bbox}
+
+            alpha = 0.0
+        else:
+            alpha = scores[best_idx] * conf
+            alpha = np.clip(alpha, 0, 0.7)
+
+            print(scores[best_idx])
+
+        bx = alpha * cx + (1 - alpha) * px
+        by = alpha * cy + (1 - alpha) * py
+        bw = alpha * width + (1 - alpha) * pw
+        bh = alpha * height + (1 - alpha) * ph
+
+        if self.reinit_counter >= UPDATE_FREQUENCY and score > REINIT_SCORE_THRESHOLD:
+            print('INIT')
+            self.init(frame, [bx, by, bw, bh])
 
         self.center_pos = np.array([bx, by])
         self.size = np.array([bw, bh])
 
-        return {
-            'filtered': [bx - bw / 2, by - bh / 2, bw, bh],
-        }
+        return {'filtered': [bx - bw / 2, by - bh / 2, bw, bh]}
 
     @staticmethod
     def generate_points(stride, size):
         ori = - (size // 2) * stride
-        x, y = np.meshgrid([ori + stride * dx for dx in np.arange(0, size)],
-                           [ori + stride * dy for dy in np.arange(0, size)])
+        x, y = np.meshgrid(
+            [ori + stride * dx for dx in np.arange(0, size)],
+            [ori + stride * dy for dy in np.arange(0, size)]
+        )
         points = np.zeros((size * size, 2), dtype=np.float32)
         points[:, 0], points[:, 1] = x.astype(np.float32).flatten(), y.astype(np.float32).flatten()
 
