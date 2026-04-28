@@ -1,28 +1,12 @@
-from pathlib import Path
-
+from collections import deque
 import cv2
 import numpy as np
 import torch
 
 from utils import corner2center
 
-BASE_DIR = Path(__file__).resolve().parent
-PROJECT_ROOT = BASE_DIR.parent
-H, W = 60, 60
 UPDATE_FREQUENCY = 50
 REINIT_SCORE_THRESHOLD = 0.99
-
-
-def get_search_bbox(center_pos, s_x):
-    cx, cy = center_pos
-    half = s_x / 2
-
-    x1 = int(cx - half)
-    y1 = int(cy - half)
-    x2 = int(cx + half)
-    y2 = int(cy + half)
-
-    return x1, y1, x2, y2
 
 
 def create_kalman():
@@ -50,7 +34,6 @@ def create_kalman():
     kalman_f.measurementNoiseCov = np.eye(4, dtype=np.float32) * 0.05
 
     return kalman_f
-
 
 
 def normalize(image_patch):
@@ -119,6 +102,7 @@ class NanoTracker:
         self.lost_counter = 0
         self.returned_counter = 0
         self.reinit_counter = 0
+        self.score_history = deque(maxlen=5)
 
         self.context_amount = 0.5
         # --------------------------------------------------------------------------------------------------------------
@@ -134,56 +118,6 @@ class NanoTracker:
 
         self.model = model
         self.model.eval()
-
-    def _redetect(self, frame, s_x, scale_z):
-        H, W = frame.shape[:2]
-
-        cx0, cy0 = self.center_pos
-
-        search_radius = s_x * 2
-
-        x_min = max(0, int(cx0 - search_radius))
-        x_max = min(W, int(cx0 + search_radius))
-        y_min = max(0, int(cy0 - search_radius))
-        y_max = min(H, int(cy0 + search_radius))
-
-        step = int(s_x * 1.2)
-
-        best_score = -1
-        best_bbox = None
-        best_center = None
-
-        for cy in range(y_min, y_max, step):
-            for cx in range(x_min, x_max, step):
-
-                x_crop = get_subwindow_tracking(
-                    frame,
-                    (cx, cy),
-                    255,
-                    round(s_x)
-                )
-
-                outputs = self.model.track(x_crop)
-                scores = self._convert_score(outputs['cls'])
-                predicted_bboxes = self._convert_bbox(outputs['loc'], self.points)
-
-                idx = np.argmax(scores)
-
-                bbox = predicted_bboxes[:, idx] / scale_z
-
-                pred_cx = bbox[0] + cx
-                pred_cy = bbox[1] + cy
-                w = bbox[2]
-                h = bbox[3]
-
-                score = scores[idx]
-
-                if score > best_score:
-                    best_score = score
-                    best_bbox = [pred_cx - w / 2, pred_cy - h / 2, w, h]
-                    best_center = (pred_cx, pred_cy)
-
-        return best_bbox, best_score, best_center
 
     def init(self, frame, bbox):
         self.lost_counter = 0
@@ -205,6 +139,7 @@ class NanoTracker:
         z_crop = get_subwindow_tracking(frame, self.center_pos, 127, crop_size)
         self.model.init(z_crop)
         self.reinit_counter = 0
+        self.score_history.clear()
 
     def track(self, frame):
         self.reinit_counter += 1
@@ -278,7 +213,6 @@ class NanoTracker:
             self.returned_counter = 0
 
         if self.is_lost:
-            print(self.lost_counter)
             if self.lost_counter == 6 or self.lost_counter % 15 == 0:
                 best_bbox, best_score, best_center = self._redetect(frame, s_x, scale_z)
                 print(best_score)
@@ -301,21 +235,64 @@ class NanoTracker:
             alpha = scores[best_idx] * conf
             alpha = np.clip(alpha, 0, 0.7)
 
-            print(scores[best_idx])
+        self.score_history.append(float(score))
 
         bx = alpha * cx + (1 - alpha) * px
         by = alpha * cy + (1 - alpha) * py
         bw = alpha * width + (1 - alpha) * pw
         bh = alpha * height + (1 - alpha) * ph
 
-        if self.reinit_counter >= UPDATE_FREQUENCY and score > REINIT_SCORE_THRESHOLD:
-            print('INIT')
+        if self.reinit_counter >= UPDATE_FREQUENCY and all(s > REINIT_SCORE_THRESHOLD for s in self.score_history):
+            print('RE-INIT')
             self.init(frame, [bx, by, bw, bh])
 
         self.center_pos = np.array([bx, by])
         self.size = np.array([bw, bh])
 
         return {'filtered': [bx - bw / 2, by - bh / 2, bw, bh]}
+
+    def _redetect(self, frame, s_x, scale_z):
+        H, W = frame.shape[:2]
+
+        cx0, cy0 = self.center_pos
+
+        search_radius = s_x * 2
+
+        x_min = max(0, int(cx0 - search_radius))
+        x_max = min(W, int(cx0 + search_radius))
+        y_min = max(0, int(cy0 - search_radius))
+        y_max = min(H, int(cy0 + search_radius))
+
+        step = int(s_x * 1.2)
+
+        best_score = -1
+        best_bbox = None
+        best_center = None
+
+        for cy in range(y_min, y_max, step):
+            for cx in range(x_min, x_max, step):
+                x_crop = get_subwindow_tracking(frame,(cx, cy),255, round(s_x))
+
+                outputs = self.model.track(x_crop)
+                scores = self._convert_score(outputs['cls'])
+                predicted_bboxes = self._convert_bbox(outputs['loc'], self.points)
+
+                idx = np.argmax(scores)
+                bbox = predicted_bboxes[:, idx] / scale_z
+
+                pred_cx = bbox[0] + cx
+                pred_cy = bbox[1] + cy
+                w = bbox[2]
+                h = bbox[3]
+
+                score = scores[idx]
+
+                if score > best_score:
+                    best_score = score
+                    best_bbox = [pred_cx - w / 2, pred_cy - h / 2, w, h]
+                    best_center = (pred_cx, pred_cy)
+
+        return best_bbox, best_score, best_center
 
     @staticmethod
     def generate_points(stride, size):
@@ -362,5 +339,6 @@ class NanoTracker:
         if event == cv2.EVENT_LBUTTONDOWN:
             w, h = 60, 60
             self.bbox = (cx, cy, w, h)
+            print(cx, cy)
             self.need_init = True
 
