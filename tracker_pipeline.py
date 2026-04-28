@@ -1,3 +1,4 @@
+import time
 from pathlib import Path
 
 import cv2
@@ -60,6 +61,9 @@ def track_object(video_path: Path, stop=False):
     model = load_pretrain(ModelBuilder(), MODEL_PATH).eval()
     model.eval()
 
+    frame_count = 0
+    start_time = time.time()
+
     tracker = NanoTracker(model)
     cv2.namedWindow('tracking', cv2.WINDOW_NORMAL)
     cv2.setMouseCallback('tracking', tracker.on_mouse)
@@ -71,11 +75,11 @@ def track_object(video_path: Path, stop=False):
         ret, frame = video.read()
         if not ret:
             break
-        #
 
-        if count in range(10, 100):
-            print('skip')
-            continue
+        frame_count += 1
+        elapsed = time.time() - start_time
+        fps = frame_count / elapsed if elapsed > 0 else 0
+        print(f'FPS: {fps:.2f}')
 
         original_frame = frame.copy()
         resized_frame, scale = resize_to_720p_if_needed(frame, max_height=720)
