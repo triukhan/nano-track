@@ -62,9 +62,9 @@ def seed_torch(seed=0):
 
 
 def build_data_loader():
-    logger.info("build train dataset")
+    logger.info('build train dataset')
     train_dataset = BANDataset()
-    logger.info("build dataset done")
+    logger.info('build dataset done')
 
     train_sampler = None
     if get_world_size() > 1:
@@ -276,13 +276,6 @@ def main():
     train_loader = build_data_loader()
 
     optimizer, lr_scheduler = build_opt_lr(model, START_EPOCH)
-
-    # if cfg.TRAIN.RESUME:
-    #     logger.info("resume from {}".format(cfg.TRAIN.RESUME))
-    #     assert os.path.isfile(cfg.TRAIN.RESUME), \
-    #         '{} is not a valid file.'.format(cfg.TRAIN.RESUME)
-    #     model, optimizer, cfg.TRAIN.START_EPOCH = \
-    #         restore_from(model, optimizer, cfg.TRAIN.RESUME)
 
     # load pretrain
     if PRETRAINED:

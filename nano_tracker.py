@@ -1,3 +1,4 @@
+import time
 from collections import deque
 import cv2
 import numpy as np
@@ -37,59 +38,10 @@ def create_kalman():
 
 
 def normalize(image_patch):
-    image_patch = image_patch.transpose(2, 0, 1)
-    image_patch = image_patch[np.newaxis, :, :, :]
-    image_patch = image_patch.astype(np.float32)
-    image_patch = torch.from_numpy(image_patch)
-    return image_patch
-
-
-def get_subwindow_tracking(image, center_pos, model_size, original_size):
-    """
-    args:
-        im: bgr based image
-        pos: center position
-        model_sz: exemplar size
-        s_z: original size
-    """
-    if isinstance(center_pos, float):
-        center_pos = [center_pos, center_pos]
-
-    channel_average = np.mean(image, axis=(0, 1))  # figuring out average color if crop_size out of image
-    im_size = image.shape
-    center = (original_size + 1) / 2
-
-    # figure out box original size x original size around center_pos
-    context_xmin = np.floor(center_pos[0] - center + 0.5)
-    context_xmax = context_xmin + original_size - 1
-    context_ymin = np.floor(center_pos[1] - center + 0.5)
-    context_ymax = context_ymin + original_size - 1
-
-    # figure out if box beyond the image
-    left_pad = int(max(0., -context_xmin))
-    top_pad = int(max(0., -context_ymin))
-    right_pad = int(max(0., context_xmax - im_size[1] + 1))
-    bottom_pad = int(max(0., context_ymax - im_size[0] + 1))
-    context_xmin = context_xmin + left_pad
-    context_xmax = context_xmax + left_pad
-    context_ymin = context_ymin + top_pad
-    context_ymax = context_ymax + top_pad
-
-    # make borders
-    if any([top_pad, bottom_pad, left_pad, right_pad]):
-        te_im = cv2.copyMakeBorder(
-            image, top_pad, bottom_pad, left_pad, right_pad, borderType=cv2.BORDER_CONSTANT, value=channel_average
-        )
-        im_patch = te_im[int(context_ymin):int(context_ymax + 1), int(context_xmin):int(context_xmax + 1)]
-    else:
-        im_patch = image[int(context_ymin):int(context_ymax + 1), int(context_xmin):int(context_xmax + 1)]
-
-    # resize patch to size that appropriate for model
-    if not np.array_equal(model_size, original_size):
-        im_patch = cv2.resize(im_patch, (model_size, model_size))
-
-    im_patch = normalize(im_patch)
-    return im_patch
+    image_patch = np.ascontiguousarray(
+        image_patch.transpose(2, 0, 1)[np.newaxis], dtype=np.float32
+    )
+    return torch.from_numpy(image_patch)
 
 
 class NanoTracker:
@@ -115,9 +67,60 @@ class NanoTracker:
         self.window = window.flatten()
         self.points = self.generate_points(self.stride, self.score_size)
         # --------------------------------------------------------------------------------------------------------------
-
+        self._channel_average = None
+        self._channel_average_counter = 0
         self.model = model
         self.model.eval()
+
+    def get_subwindow_tracking(self, image, center_pos, model_size, original_size):
+        """
+        args:
+            im: bgr based image
+            pos: center position
+            model_sz: exemplar size
+            s_z: original size
+        """
+        if isinstance(center_pos, float):
+            center_pos = [center_pos, center_pos]
+
+        if self._channel_average is None or self._channel_average_counter % 30 == 0:
+            self._channel_average = np.mean(image, axis=(0, 1))
+        self._channel_average_counter += 1
+
+        im_size = image.shape
+        center = (original_size + 1) / 2
+
+        # figure out box original size x original size around center_pos
+        context_xmin = np.floor(center_pos[0] - center + 0.5)
+        context_xmax = context_xmin + original_size - 1
+        context_ymin = np.floor(center_pos[1] - center + 0.5)
+        context_ymax = context_ymin + original_size - 1
+
+        # figure out if box beyond the image
+        left_pad = int(max(0., -context_xmin))
+        top_pad = int(max(0., -context_ymin))
+        right_pad = int(max(0., context_xmax - im_size[1] + 1))
+        bottom_pad = int(max(0., context_ymax - im_size[0] + 1))
+        context_xmin = context_xmin + left_pad
+        context_xmax = context_xmax + left_pad
+        context_ymin = context_ymin + top_pad
+        context_ymax = context_ymax + top_pad
+
+        # make borders
+        if any([top_pad, bottom_pad, left_pad, right_pad]):
+            te_im = cv2.copyMakeBorder(
+                image, top_pad, bottom_pad, left_pad, right_pad, borderType=cv2.BORDER_CONSTANT, value=channel_average
+            )
+            im_patch = te_im[int(context_ymin):int(context_ymax + 1), int(context_xmin):int(context_xmax + 1)]
+        else:
+            im_patch = image[int(context_ymin):int(context_ymax + 1), int(context_xmin):int(context_xmax + 1)]
+
+        # resize patch to size that appropriate for model
+        if not np.array_equal(model_size, original_size):
+            im_patch = cv2.resize(im_patch, (model_size, model_size))
+
+        im_patch = normalize(im_patch)
+        return im_patch
 
     def init(self, frame, bbox):
         self.lost_counter = 0
@@ -136,12 +139,14 @@ class NanoTracker:
         context = self.context_amount * (w + h)
         crop_size = int(np.sqrt((w + context) * (h + context)))  # sqrt saves proportions
 
-        z_crop = get_subwindow_tracking(frame, self.center_pos, 127, crop_size)
+        z_crop = self.get_subwindow_tracking(frame, self.center_pos, 127, crop_size)
         self.model.init(z_crop)
         self.reinit_counter = 0
         self.score_history.clear()
 
     def track(self, frame):
+        t0 = time.perf_counter()
+
         self.reinit_counter += 1
         prediction = self.kalman_filter.predict()
         px, py, pw, ph = prediction[:4].flatten()
@@ -156,9 +161,22 @@ class NanoTracker:
         scale_z = 127 / s_z
         s_x = s_z * (255 / 127)
 
-        x_crop = get_subwindow_tracking(frame, self.center_pos, 255, round(s_x))
+        t1 = time.perf_counter()
 
-        outputs = self.model.track(x_crop)
+        x_crop = self.get_subwindow_tracking(frame, self.center_pos, 255, round(s_x))
+
+        t2 = time.perf_counter()
+
+        x_crop_gpu = x_crop
+
+        t3 = time.perf_counter()
+
+        torch.cuda.synchronize()
+        outputs = self.model.track(x_crop_gpu)
+        torch.cuda.synchronize()
+
+        t4 = time.perf_counter()
+
         scores = self._convert_score(outputs['cls'])
         predicted_bboxes = self._convert_bbox(outputs['loc'], self.points)
 
@@ -169,6 +187,7 @@ class NanoTracker:
             pad = (w + h) * 0.5
             return np.sqrt((w + pad) * (h + pad))
 
+        t5 = time.perf_counter()
         s_c = change(sz(predicted_bboxes[2, :], predicted_bboxes[3, :]) / (sz(self.size[0] * scale_z, self.size[1] * scale_z)))
         r_c = change((self.size[0] / self.size[1]) / (predicted_bboxes[2, :] / predicted_bboxes[3, :]))
 
@@ -187,7 +206,7 @@ class NanoTracker:
         height = self.size[1] * (1 - lr) + bbox[3] * lr
 
         cx, cy, width, height = self._bbox_clip(cx, cy, width, height, frame.shape[:2])
-
+        t6 = time.perf_counter()
         score = scores[best_idx]
         score_threshold = 0.95
 
@@ -211,7 +230,7 @@ class NanoTracker:
             self.kalman_filter.correct(np.array([[cx], [cy], [width], [height]], np.float32))
             self.lost_counter = 0
             self.returned_counter = 0
-
+        t7 = time.perf_counter()
         if self.is_lost:
             if self.lost_counter == 6 or self.lost_counter % 15 == 0:
                 best_bbox, best_score, best_center = self._redetect(frame, s_x, scale_z)
@@ -248,7 +267,19 @@ class NanoTracker:
 
         self.center_pos = np.array([bx, by])
         self.size = np.array([bw, bh])
+        t8 = time.perf_counter()
 
+        print(
+            f"[TIMING] kalman+math={1000 * (t1 - t0):.1f}ms | " 
+            f"subwindow={1000 * (t2 - t1):.1f}ms | "
+            f"to_cuda={1000 * (t3 - t2):.1f}ms | "
+            f"inference={1000 * (t4 - t3):.1f}ms | "
+            f"postprocess={1000 * (t5 - t4):.1f}ms | "
+            f"postprocess={1000 * (t6 - t5):.1f}ms | "
+            f"postprocess={1000 * (t7 - t6):.1f}ms | "
+            f"postprocess={1000 * (t8 - t7):.1f}ms | "
+            f"total={1000 * (t8 - t0):.1f}ms"
+        )
         return {'filtered': [bx - bw / 2, by - bh / 2, bw, bh]}
 
     def _redetect(self, frame, s_x, scale_z):
@@ -271,7 +302,7 @@ class NanoTracker:
 
         for cy in range(y_min, y_max, step):
             for cx in range(x_min, x_max, step):
-                x_crop = get_subwindow_tracking(frame,(cx, cy),255, round(s_x))
+                x_crop = self.get_subwindow_tracking(frame,(cx, cy),255, round(s_x))
 
                 outputs = self.model.track(x_crop)
                 scores = self._convert_score(outputs['cls'])

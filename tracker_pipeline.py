@@ -2,6 +2,7 @@ import time
 from pathlib import Path
 
 import cv2
+import torch
 
 from models.model_builder import ModelBuilder
 from nano_tracker import NanoTracker
@@ -58,7 +59,7 @@ def track_object(video_path: Path, stop=False):
     video = cv2.VideoCapture(video_path)
     video.set(cv2.CAP_PROP_POS_FRAMES, 0)
 
-    model = load_pretrain(ModelBuilder(), MODEL_PATH).eval()
+    model = load_pretrain(ModelBuilder(), MODEL_PATH)
     model.eval()
 
     frame_count = 0
@@ -68,7 +69,7 @@ def track_object(video_path: Path, stop=False):
     cv2.namedWindow('tracking', cv2.WINDOW_NORMAL)
     cv2.setMouseCallback('tracking', tracker.on_mouse)
     count = 0
-    tracker.on_mouse(cv2.EVENT_LBUTTONDOWN, 1695, 1383, 5, 5)
+    # tracker.on_mouse(cv2.EVENT_LBUTTONDOWN, 1695, 1383, 5, 5)
 
     while True:
         count += 1
@@ -97,7 +98,6 @@ def track_object(video_path: Path, stop=False):
 
         cv2.imshow('tracking', original_frame)
 
-        # if stop:
         key = cv2.waitKey(1)
         if key == ord('q'):
             break
@@ -106,5 +106,5 @@ def track_object(video_path: Path, stop=False):
     cv2.destroyAllWindows()
 
 
-vid = PROJECT_ROOT / 'nano-track' / 'data' / '8177427-uhd_3840_2160_24fps.mp4'
+vid = PROJECT_ROOT / 'nano-track' / 'data' / 'road.mp4'
 track_object(vid, stop=True)
