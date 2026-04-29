@@ -5,7 +5,9 @@ Almost all code was taken from https://github.com/HonglinChu/SiamTrackers, but I
 - Kalman filter in ```nano_tracker.py```: At first - stabilization, the most common usage for tracking. At second - lost mode, when tracker is lost it will be conducted only by Kalman filter trajectory.
 - Re-detection in ```nano_tracker.py``` (```_redetect```): If tracker is lost - it will try to use search with doubled radius to find original object.
 - Re-initializing when tracker confident. Needs for successful tracking after object changing during the track.
-- Resizing input video to 720p to work in real-time in 14 fps. 
+- Resizing input video to 720p, caching channel_average.
+
+Now tracker works in 18 fps with 720p video.
 
 So, the combination of these 2 first improvements will provide mechanism (mostly based on assumptions) that help to re-detect objects after disappearing it behind the other objects.
 Obviously, it's need to be improved in different ways (speed (rewrite to c++, use onnx or openvino), more robust re-detection, maybe some kalman filter improvements, more precisely figure out when we have to turn on the lost mode), it would be improved, I tested big amount ways to improve this tracker (can be viewed by commit history + I actually started in the different repo) and will test more, but for now, I don't have time :)
