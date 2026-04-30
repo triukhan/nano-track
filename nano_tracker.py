@@ -253,10 +253,10 @@ class NanoTracker:
             self.lost_counter = 0
             self.returned_counter = 0
         else:
-            print('ONLY FLOW & KALMAN')
-            # tracker is not trusted
-            # use only flow + kalman
             if flow_result is not None:
+                # tracker is not trusted
+                # use only flow + kalman
+                print('ONLY FLOW & KALMAN')
                 wf = 0.7
                 wk = 0.3
                 bx = wf * fx + wk * px
