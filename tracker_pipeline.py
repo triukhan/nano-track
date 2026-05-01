@@ -98,7 +98,7 @@ def track_object(video_path: Path, stop=False):
 
         cv2.imshow('tracking', original_frame)
 
-        key = cv2.waitKey(1)
+        key = cv2.waitKey(0)
         if key == ord('q'):
             break
 

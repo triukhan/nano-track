@@ -174,7 +174,7 @@ class NanoTracker:
         prediction = self.kalman_filter.predict()
         px, py, pw, ph = prediction[:4].flatten()
 
-        flow_result = self._track_flow(frame)
+        flow_result, flow_error = self._track_flow(frame)
 
         if flow_result is not None:
             fx, fy, fw, fh, flow_n = flow_result
@@ -232,11 +232,11 @@ class NanoTracker:
 
         print(self.lost_counter, score)
 
-        if tracker_ok:
+        if not self.is_lost:
             # tracker + flow + kalman
             # weight of tracker depends on score
             wt = np.clip((score - SCORE_THRESHOLD) / (1.0 - SCORE_THRESHOLD + 1e-6), 0.0, 1.0)
-            wt = 0.45 + 0.35 * wt  # tracker in [0.45, 0.80]
+            wt = 0.45 + 0.35 * wt
             if flow_result is not None:
                 wf = 0.15
                 wk = 1.0 - wt - wf
@@ -248,12 +248,8 @@ class NanoTracker:
             by = wt * cy + wf * (fy if flow_result is not None else 0.0) + wk * py
             bw = wt * width + wf * (fw if flow_result is not None else 0.0) + wk * pw
             bh = wt * height + wf * (fh if flow_result is not None else 0.0) + wk * ph
-
-            self.kalman_filter.correct(np.array([[cx], [cy], [width], [height]], np.float32))
-            self.lost_counter = 0
-            self.returned_counter = 0
         else:
-            if flow_result is not None:
+            if flow_result is not None and flow_error:
                 # tracker is not trusted
                 # use only flow + kalman
                 print('ONLY FLOW & KALMAN')
@@ -299,7 +295,7 @@ class NanoTracker:
 
     def _track_flow(self, frame):
         if self.prev_gray is None or self.flow_points is None or len(self.flow_points) < 5:
-            return None
+            return None, None
 
         gray = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
 
@@ -316,7 +312,7 @@ class NanoTracker:
         if next_points is None or status is None:
             self.prev_gray = gray
             self.flow_points = None
-            return None
+            return None, None
 
         good_old = self.flow_points[status.flatten() == 1].reshape(-1, 2)
         good_new = next_points[status.flatten() == 1].reshape(-1, 2)
@@ -324,10 +320,13 @@ class NanoTracker:
         if len(good_new) < 5:
             self.prev_gray = gray
             self.flow_points = None
-            return None
+            return None, None
 
         displacements = good_new - good_old
         dx, dy = np.median(displacements, axis=0)
+        disp_error = np.linalg.norm(displacements - np.median(displacements, axis=0), axis=1)
+        median_flow_error = np.median(disp_error)
+        print(median_flow_error)
 
         cx, cy, w, h = self.flow_bbox
         new_cx = cx + dx
@@ -352,7 +351,7 @@ class NanoTracker:
         self.flow_points = good_new.reshape(-1, 1, 2)
         self.flow_bbox = np.array([new_cx, new_cy, new_w, new_h], dtype=np.float32)
 
-        return new_cx, new_cy, new_w, new_h, len(good_new)
+        return (new_cx, new_cy, new_w, new_h, len(good_new)), median_flow_error
 
     @staticmethod
     def generate_points(stride, size):
