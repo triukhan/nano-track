@@ -230,7 +230,7 @@ class NanoTracker:
         elif self.is_lost:
             self.returned_counter += 1 # need to success returning
 
-        print(self.lost_counter, score)
+        # print(self.lost_counter, score)
 
         if not self.is_lost:
             # tracker + flow + kalman
@@ -252,7 +252,7 @@ class NanoTracker:
             if flow_result is not None and flow_error:
                 # tracker is not trusted
                 # use only flow + kalman
-                print('ONLY FLOW & KALMAN')
+                # print('ONLY FLOW & KALMAN')
                 wf = 0.7
                 wk = 0.3
                 bx = wf * fx + wk * px
@@ -260,7 +260,7 @@ class NanoTracker:
                 bw = wf * fw + wk * pw
                 bh = wf * fh + wk * ph
             else:
-                print('ONLY KALMAN')
+                # print('ONLY KALMAN')
                 bx, by, bw, bh = px, py, pw, ph
 
         bx, by, bw, bh = self._bbox_clip(bx, by, bw, bh, frame.shape[:2])
@@ -279,7 +279,7 @@ class NanoTracker:
         self.score_history.append(score)
 
         if self.reinit_counter >= UPDATE_FREQUENCY and all(s > REINIT_SCORE_THRESHOLD for s in self.score_history):
-            print('RE-INIT')
+            # print('RE-INIT')
             self.init(frame, [bx, by, bw, bh])
             return {'filtered': [bx - bw / 2, by - bh / 2, bw, bh]}
 
@@ -326,7 +326,7 @@ class NanoTracker:
         dx, dy = np.median(displacements, axis=0)
         disp_error = np.linalg.norm(displacements - np.median(displacements, axis=0), axis=1)
         median_flow_error = np.median(disp_error)
-        print(median_flow_error)
+        # print(median_flow_error)
 
         cx, cy, w, h = self.flow_bbox
         new_cx = cx + dx
@@ -408,8 +408,8 @@ class NanoTracker:
 
     def on_mouse(self, event, cx, cy, _, __):
         if event == cv2.EVENT_LBUTTONDOWN:
-            w, h = 60, 60
+            w, h = 40, 40
             self.bbox = (cx, cy, w, h)
-            print(cx, cy)
+            # print(cx, cy)
             self.need_init = True
 

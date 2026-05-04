@@ -69,7 +69,7 @@ def track_object(video_path: Path, stop=False):
     cv2.namedWindow('tracking', cv2.WINDOW_NORMAL)
     cv2.setMouseCallback('tracking', tracker.on_mouse)
     count = 0
-    tracker.on_mouse(cv2.EVENT_LBUTTONDOWN, 551, 1580, 5, 5)
+    # tracker.on_mouse(cv2.EVENT_LBUTTONDOWN, 551, 1580, 5, 5)
 
     while True:
         count += 1
@@ -79,8 +79,8 @@ def track_object(video_path: Path, stop=False):
 
         frame_count += 1
         elapsed = time.time() - start_time
-        fps = frame_count / elapsed if elapsed > 0 else 0
-        print(f'FPS: {fps:.2f}')
+        # fps = frame_count / elapsed if elapsed > 0 else 0q
+        # print(f'FPS: {fps:.2f}')
 
         original_frame = frame.copy()
         resized_frame, scale = resize_to_720p_if_needed(frame, max_height=720)
@@ -94,6 +94,13 @@ def track_object(video_path: Path, stop=False):
             res = tracker.track(resized_frame)
             filtered_resized = res['filtered']
             filtered_original = unscale_bbox(filtered_resized, scale)
+            x, y, w, h = filtered_original
+            x1 = float(x)
+            y1 = float(y)
+            x2 = float(x + w)
+            y2 = float(y + h)
+
+            print(f'{x1:.4f},{y1:.4f},{x2:.4f},{y2:.4f}', count)
             draw_box(original_frame, filtered_original, (0, 255, 0), 'filtered')
 
         cv2.imshow('tracking', original_frame)
@@ -106,5 +113,5 @@ def track_object(video_path: Path, stop=False):
     cv2.destroyAllWindows()
 
 
-vid = PROJECT_ROOT / 'nano-track' / 'data' / '8177427-uhd_3840_2160_24fps.mp4'
+vid = PROJECT_ROOT / 'nano-track' / 'data' / 'Isles of Glencoe.mp4'
 track_object(vid, stop=True)
