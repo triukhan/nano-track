@@ -408,7 +408,7 @@ class NanoTracker:
 
     def on_mouse(self, event, cx, cy, _, __):
         if event == cv2.EVENT_LBUTTONDOWN:
-            w, h = 40, 40
+            w, h = 80, 80
             self.bbox = (cx, cy, w, h)
             # print(cx, cy)
             self.need_init = True
