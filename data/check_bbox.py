@@ -11,8 +11,8 @@ def natural_sort_key(s):
 
 BASE_DIR = Path(__file__).resolve().parent
 PROJECT_ROOT = BASE_DIR.parent
-frames_dir = PROJECT_ROOT / 'data' / 'frames'
-gt_path = PROJECT_ROOT / 'data' / 'frames' / 'groundtruth.txt'
+frames_dir = PROJECT_ROOT / 'data' / 'train' / 'video_40'
+gt_path = PROJECT_ROOT / 'data' / 'train' / 'video_40' / 'groundtruth.txt'
 
 image_files = [
     f for f in os.listdir(frames_dir)

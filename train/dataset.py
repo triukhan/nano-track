@@ -1,7 +1,7 @@
-import json
 import logging
 import sys
 import os
+from pathlib import Path
 
 import cv2
 import numpy as np
@@ -11,7 +11,8 @@ from augmentation import Augmentation
 from point_target import PointTarget
 from utils import center2corner, Center
 
-logger = logging.getLogger("global")
+logger = logging.getLogger('global')
+DATASET_PATH = Path(__file__).resolve().parent.parent / 'data' / 'train'
 
 # setting opencv
 pyv = sys.version[0]
@@ -25,7 +26,7 @@ DATASET = {
     'SEARCH': {'SHIFT': 64, 'SCALE': 0.18, 'BLUR': 0.2, 'FLIP': 0.0, 'COLOR': 1.0},
     'NEG': 0.2,
     'GRAY': 0.0,
-    'REGION_DATASET': {'ROOT': '/home/danylo/data/REGION_DATASET/train', 'FRAME_RANGE': 100, 'NUM_USE': 100000}
+    'REGION_DATASET': {'ROOT': DATASET_PATH, 'FRAME_RANGE': 100, 'NUM_USE': 100000}
 }
 TRAIN_EPOCH = 10
 EXEMPLAR_SIZE = 127
@@ -80,11 +81,10 @@ class SubDataset(object):
 
             if len(frames) == 0:
                 continue
-
             self.labels[video] = {
-                "0": {
-                    "frames": frames,
-                    "annos": annos
+                '0': {
+                    'frames': frames,
+                    'annos': annos
                 }
             }
 
@@ -92,7 +92,6 @@ class SubDataset(object):
 
         self.num = len(self.videos)
         self.num_use = self.num if self.num_use == -1 else self.num_use
-
         self.pick = self.shuffle()
 
     def shuffle(self):
@@ -104,7 +103,7 @@ class SubDataset(object):
         return pick[:self.num_use]
 
     def get_image_anno(self, video, track, frame):
-        image_path = os.path.join(self.root, video, f"{frame+1:08d}.jpg")
+        image_path = os.path.join(self.root, video, f'frame_{frame+1:05d}.jpg')
         bbox = self.labels[video][track]["annos"][frame]
         return image_path, bbox
 
@@ -123,6 +122,7 @@ class SubDataset(object):
         right = min(template_idx + self.frame_range, len(frames) - 1)
 
         search_idx = np.random.randint(left, right + 1)
+        print(search_idx)
         search_frame = frames[search_idx]
 
         return self.get_image_anno(video_name, track, template_frame), \
@@ -131,10 +131,9 @@ class SubDataset(object):
     def get_random_target(self, index=-1):
         if index == -1:
             index = np.random.randint(0, self.num)
-
         video_name = self.videos[index]
         video = self.labels[video_name]
-        track = "0"
+        track = '0'
         track_info = video[track]
 
         frames = track_info['frames']
