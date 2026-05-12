@@ -5,7 +5,7 @@ import os
 
 BASE_DIR = Path(__file__).resolve().parent
 PROJECT_ROOT = BASE_DIR.parent
-vid = PROJECT_ROOT / 'data' / '6517979-hd_1920_1080_24fps.mp4'
+vid = PROJECT_ROOT / 'data' / '20492681-uhd_3840_2160_60fps.mp4'
 output_folder = 'frames'
 
 print(vid)

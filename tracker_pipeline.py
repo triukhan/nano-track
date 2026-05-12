@@ -95,26 +95,8 @@ def track_object(video_path: Path, stop=False):
             filtered_resized = res['filtered']
             filtered_original = unscale_bbox(filtered_resized, scale)
 
-            # центр із трекера
             x, y, w, h = filtered_original
-            cx = x + w / 2
-            cy = y + h / 2
-
-            # 🔥 фіксований розмір
-            fixed_w = 80  # підбери
-            fixed_h = 80  # підбери
-
-            # новий bbox від центру
-            x1 = cx - fixed_w / 2
-            y1 = cy - fixed_h / 2
-            x2 = cx + fixed_w / 2
-            y2 = cy + fixed_h / 2
-
-            fixed_bbox = [x1, y1, fixed_w, fixed_h]
-
-            print(f'{x1:.4f},{y1:.4f},{x2:.4f},{y2:.4f}', count)
-
-            draw_box(original_frame, fixed_bbox, (0, 255, 0), 'fixed')
+            draw_box(original_frame, [x, y, w, h], (0, 255, 0), 'fixed')
 
         cv2.imshow('tracking', original_frame)
 
@@ -126,5 +108,5 @@ def track_object(video_path: Path, stop=False):
     cv2.destroyAllWindows()
 
 
-vid = PROJECT_ROOT / 'nano-track' / 'data' / '6517979-hd_1920_1080_24fps.mp4'
+vid = PROJECT_ROOT / 'nano-track' / 'data' / 'road.mp4'
 track_object(vid, stop=True)

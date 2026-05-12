@@ -19,13 +19,13 @@ if pyv[0] == '3':
     cv2.ocl.setUseOpenCL(False)
 
 DATASET = {
-    'NAMES': ['GOT10K'],
+    'NAMES': ['REGION_DATASET'],
     'VIDEOS_PER_EPOCH': 400000,
     'TEMPLATE': {'SHIFT': 4, 'SCALE': 0.05, 'BLUR': 0.0, 'FLIP': 0.0, 'COLOR': 1.0},
     'SEARCH': {'SHIFT': 64, 'SCALE': 0.18, 'BLUR': 0.2, 'FLIP': 0.0, 'COLOR': 1.0},
     'NEG': 0.2,
     'GRAY': 0.0,
-    'GOT10K': {'ROOT': '/home/danylo/data/GOT-10k/train', 'FRAME_RANGE': 100, 'NUM_USE': 100000}
+    'REGION_DATASET': {'ROOT': '/home/danylo/data/REGION_DATASET/train', 'FRAME_RANGE': 100, 'NUM_USE': 100000}
 }
 TRAIN_EPOCH = 10
 EXEMPLAR_SIZE = 127
@@ -67,14 +67,12 @@ class SubDataset(object):
                 if not line:
                     continue
 
-                x, y, w, h = map(float, line.split(","))
+                x1, y1, x2, y2 = map(float, line.split(","))
 
+                w = x2 - x1
+                h = y2 - y1
                 if w <= 0 or h <= 0:
                     continue
-
-                # convert to x1,y1,x2,y2
-                x1, y1 = x, y
-                x2, y2 = x + w, y + h
 
                 frame_id = i
                 frames.append(frame_id)
